@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Prevent generated content from breaking layout */
+#root {
+  isolation: isolate;
+  min-height: 100vh;
+}
+
+/* Ensure main app container maintains structure */
+.min-h-screen {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Isolate preview content to prevent CSS leakage */
+.preview-isolation {
+  position: relative;
+  isolation: isolate;
+  contain: layout style paint;
+  overflow: hidden;
+}
+
+/* Prevent grid items from expanding beyond their bounds */
+.grid > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Ensure preview container doesn't expand parent */
+.preview-isolation > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
