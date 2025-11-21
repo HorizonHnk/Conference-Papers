@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FileText,
   Upload,
@@ -21,11 +21,27 @@ import {
   Layers,
   Mic,
   ChevronDown,
-  FileType, // Generic file icon
+  FileType,
   Users,
   UserPlus,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  User,
+  Save,
+  FolderOpen,
+  Clock,
+  Loader2,
+  Image,
+  FileImage,
+  File
 } from 'lucide-react';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logOut, onAuthChange, saveDocument, getUserDocuments, deleteDocument } from './firebase';
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+
+// Set up PDF.js worker - use unpkg CDN which has all versions
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 /**
  * Conference & Thesis Paper Generator
@@ -44,7 +60,8 @@ const ConferencePaperGenerator = () => {
   const [inputText, setInputText] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('THESIS'); // Default to Thesis
   const [targetPages, setTargetPages] = useState('Auto');
-  const [selectedTone, setSelectedTone] = useState('Academic'); // New State for Tone
+  const [selectedTone, setSelectedTone] = useState('Academic'); // State for Tone
+  const [referenceStyle, setReferenceStyle] = useState('Auto'); // Reference style: Auto, Harvard, IEEE
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState(null);
   const [error, setError] = useState(null);
@@ -66,6 +83,33 @@ const ConferencePaperGenerator = () => {
   });
   const previewContainerRef = useRef(null);
 
+  // Firebase Auth & Firestore State
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [savedDocuments, setSavedDocuments] = useState([]);
+  const [showSavedDocs, setShowSavedDocs] = useState(false);
+  const [savingDoc, setSavingDoc] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Auth Modal State
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState('signin'); // 'signin', 'signup', 'reset'
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading2, setAuthLoading2] = useState(false);
+  const [authSuccess, setAuthSuccess] = useState('');
+
+  // File Upload State
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
   // Sanitize HTML to remove scripts and potentially harmful content
   const sanitizeHTML = (html) => {
     // Remove script tags and their content
@@ -76,6 +120,155 @@ const ConferencePaperGenerator = () => {
     // Remove javascript: protocols
     sanitized = sanitized.replace(/javascript:/gi, '');
     return sanitized;
+  };
+
+  // --- Firebase Auth Effect ---
+  useEffect(() => {
+    const unsubscribe = onAuthChange((user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+      if (user) {
+        loadUserDocuments(user.uid);
+      } else {
+        setSavedDocuments([]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- Firebase Auth Handlers ---
+  const openAuthModal = (mode = 'signin') => {
+    setAuthMode(mode);
+    setAuthEmail('');
+    setAuthPassword('');
+    setAuthName('');
+    setAuthError('');
+    setAuthSuccess('');
+    setShowAuthModal(true);
+  };
+
+  const closeAuthModal = () => {
+    setShowAuthModal(false);
+    setAuthError('');
+    setAuthSuccess('');
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthLoading2(true);
+    setAuthError('');
+    const { error } = await signInWithGoogle();
+    if (error) {
+      setAuthError(error);
+    } else {
+      closeAuthModal();
+    }
+    setAuthLoading2(false);
+  };
+
+  const handleEmailSignIn = async (e) => {
+    e.preventDefault();
+    setAuthLoading2(true);
+    setAuthError('');
+    const { error } = await signInWithEmail(authEmail, authPassword);
+    if (error) {
+      setAuthError(error);
+    } else {
+      closeAuthModal();
+    }
+    setAuthLoading2(false);
+  };
+
+  const handleEmailSignUp = async (e) => {
+    e.preventDefault();
+    setAuthLoading2(true);
+    setAuthError('');
+    const { error } = await signUpWithEmail(authEmail, authPassword, authName);
+    if (error) {
+      setAuthError(error);
+    } else {
+      closeAuthModal();
+    }
+    setAuthLoading2(false);
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    setAuthLoading2(true);
+    setAuthError('');
+    setAuthSuccess('');
+    const { success, error } = await resetPassword(authEmail);
+    if (error) {
+      setAuthError(error);
+    } else if (success) {
+      setAuthSuccess('Password reset email sent! Check your inbox.');
+    }
+    setAuthLoading2(false);
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await logOut();
+    if (error) {
+      setError(`Sign-out failed: ${error}`);
+    }
+    setShowSavedDocs(false);
+  };
+
+  // --- Firestore Document Handlers ---
+  const loadUserDocuments = async (userId) => {
+    setLoadingDocs(true);
+    const { documents, error } = await getUserDocuments(userId);
+    if (error) {
+      console.error('Failed to load documents:', error);
+    } else {
+      setSavedDocuments(documents);
+    }
+    setLoadingDocs(false);
+  };
+
+  const handleSaveDocument = async () => {
+    if (!currentUser) {
+      setError('Please sign in to save documents');
+      return;
+    }
+    if (!generatedContent) {
+      setError('No content to save');
+      return;
+    }
+
+    setSavingDoc(true);
+    const { id, error } = await saveDocument(currentUser.uid, {
+      title: documentTitle || `${selectedTemplate} Paper - ${new Date().toLocaleDateString()}`,
+      template: selectedTemplate,
+      content: generatedContent,
+      userInput: inputText
+    });
+
+    if (error) {
+      setError(`Failed to save: ${error}`);
+    } else {
+      setShowSaveModal(false);
+      setDocumentTitle('');
+      loadUserDocuments(currentUser.uid);
+    }
+    setSavingDoc(false);
+  };
+
+  const handleDeleteDocument = async (docId) => {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+
+    const { error } = await deleteDocument(docId);
+    if (error) {
+      setError(`Failed to delete: ${error}`);
+    } else {
+      loadUserDocuments(currentUser.uid);
+    }
+  };
+
+  const handleLoadDocument = (doc) => {
+    setGeneratedContent(doc.content);
+    setInputText(doc.userInput || '');
+    setSelectedTemplate(doc.template || 'THESIS');
+    setShowSavedDocs(false);
   };
 
   // --- Configuration ---
@@ -309,8 +502,28 @@ const ConferencePaperGenerator = () => {
 
     const apiKey = userApiKey || ""; 
     const templateConfig = TEMPLATES[selectedTemplate];
-    const toneInstruction = TONES[selectedTone]; 
-    
+    const toneInstruction = TONES[selectedTone];
+
+    // Reference style instruction
+    const getRefStyle = () => {
+      if (referenceStyle === 'Auto') {
+        return selectedTemplate === 'THESIS' ? 'Harvard' : 'IEEE';
+      }
+      return referenceStyle;
+    };
+    const refStyle = getRefStyle();
+    const referenceInstruction = refStyle === 'Harvard'
+      ? `REFERENCE STYLE: Harvard (Author-Date)
+         - In-text citations: (Author, Year) e.g., (Smith, 2023)
+         - Reference list: Author, A.A. (Year) Title of work. Publisher.
+         - For multiple authors: use "et al." for 3+ authors
+         - Alphabetical order in reference list`
+      : `REFERENCE STYLE: IEEE (Numeric)
+         - In-text citations: [1], [2], [3] in order of appearance
+         - Reference list: [1] A. Author, "Title," Journal, vol. X, no. Y, pp. 1-10, Year.
+         - Number references consecutively in order of citation
+         - Include DOI when available`;
+
     const lengthInstruction = targetPages === 'Auto'
       ? "Content Length: Generate comprehensive content appropriate for the topic, ensuring all sections are well-covered."
       : `Content Length: Generate a SUBSTANTIAL amount of detailed text, data, figures, and tables. The output HTML must contain enough content to fill approximately ${targetPages} when printed. Expand deeply on Methodology, Literature Review, and Discussion to meet this length requirement.`;
@@ -344,6 +557,8 @@ const ConferencePaperGenerator = () => {
 
       TONE AND STYLE INSTRUCTION:
       ${toneInstruction}
+
+      ${referenceInstruction}
 
       ${lengthInstruction}
       ${customFormatInstruction}
@@ -437,14 +652,48 @@ const ConferencePaperGenerator = () => {
 
   // --- Download Handlers ---
 
+  // Helper function to get export styles based on custom formatting
+  const getExportStyles = () => {
+    if (useCustomFormatting) {
+      return {
+        fontFamily: customFormat.fontFamily,
+        fontSize: `${customFormat.fontSize}pt`,
+        lineHeight: customFormat.lineSpacing,
+        margin: `${customFormat.padding}cm`,
+        textAlign: customFormat.textAlign,
+        color: customFormat.textColor
+      };
+    }
+    // Default styles
+    return {
+      fontFamily: "'Times New Roman', Times, serif",
+      fontSize: '12pt',
+      lineHeight: '1.5',
+      margin: '1.5cm',
+      textAlign: 'justify',
+      color: '#000000'
+    };
+  };
+
   // 1. Download as HTML (Original)
   const handleDownloadHTML = () => {
+    const styles = getExportStyles();
     const completeHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Academic Paper</title>
+  <style>
+    body {
+      font-family: ${styles.fontFamily};
+      font-size: ${styles.fontSize};
+      line-height: ${styles.lineHeight};
+      text-align: ${styles.textAlign};
+      color: ${styles.color};
+      padding: ${styles.margin};
+    }
+  </style>
 </head>
 <body>
 ${generatedContent}
@@ -463,6 +712,7 @@ ${generatedContent}
   // 2. Download as Word (.doc)
   // This wraps the content in a compatible MSO XML header so Word opens it correctly with styles
   const handleDownloadWord = () => {
+    const styles = getExportStyles();
     const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
 <head>
 <meta charset='utf-8'>
@@ -478,12 +728,14 @@ ${generatedContent}
 <style>
 @page {
   size: A4;
-  margin: 2.5cm;
+  margin: ${styles.margin};
 }
 body {
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  line-height: 1.5;
+  font-family: ${styles.fontFamily};
+  font-size: ${styles.fontSize};
+  line-height: ${styles.lineHeight};
+  text-align: ${styles.textAlign};
+  color: ${styles.color};
 }
 </style>
 </head>
@@ -527,6 +779,7 @@ body {
   };
 
   const handlePrint = () => {
+    const styles = getExportStyles();
     const printWindow = window.open('', '_blank');
     const printContent = `
 <!DOCTYPE html>
@@ -537,12 +790,14 @@ body {
   <style>
     @page {
       size: A4;
-      margin: 2.5cm;
+      margin: ${styles.margin};
     }
     body {
-      font-family: 'Times New Roman', Times, serif;
-      font-size: 12pt;
-      line-height: 1.5;
+      font-family: ${styles.fontFamily};
+      font-size: ${styles.fontSize};
+      line-height: ${styles.lineHeight};
+      text-align: ${styles.textAlign};
+      color: ${styles.color};
       margin: 0;
       padding: 0;
     }
@@ -566,17 +821,215 @@ ${generatedContent}
   };
 
   // --- Handlers ---
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.type === "text/plain") {
-        const reader = new FileReader();
-        reader.onload = (e) => setInputText(e.target.result);
-        reader.readAsText(file);
-      } else {
-        setInputText(`[File Uploaded: ${file.name}]\n\nPlease generate a paper based on the content of this file. (Note: For this demo, please copy-paste text if not .txt)`);
+  // Supported file types
+  const SUPPORTED_TYPES = {
+    'text/plain': 'txt',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'image/png': 'image',
+    'image/jpeg': 'image',
+    'image/jpg': 'image',
+    'image/gif': 'image',
+    'image/webp': 'image',
+    'image/bmp': 'image'
+  };
+
+  // Extract text from PDF
+  const extractTextFromPDF = async (file) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n\n';
       }
+
+      return fullText.trim();
+    } catch (error) {
+      console.error('PDF extraction error:', error);
+      throw new Error('Failed to extract text from PDF. Please try a different file.');
     }
+  };
+
+  // Extract text from Word document (.docx)
+  const extractTextFromWord = async (file) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value.trim();
+    } catch (error) {
+      console.error('Word extraction error:', error);
+      throw new Error('Failed to extract text from Word document. Please try a different file.');
+    }
+  };
+
+  // Extract text from image using Gemini Vision
+  const extractTextFromImage = async (file) => {
+    try {
+      const apiKey = userApiKey;
+      if (!apiKey) {
+        throw new Error('API key required for image text extraction');
+      }
+
+      // Convert image to base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Use Gemini Vision to extract text
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: 'Extract and transcribe ALL text from this image. Include all visible text, handwriting, printed text, tables, and any other textual content. Preserve the structure and formatting as much as possible. If there are tables, format them clearly. If the image contains a document, extract the full document content.' },
+                { inline_data: { mime_type: file.type, data: base64 } }
+              ]
+            }]
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to process image');
+      }
+
+      const data = await response.json();
+      const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      if (!extractedText) {
+        return `[Image: ${file.name}]\n\nNo text could be extracted from this image. The image may contain visual content that can be described for your paper.`;
+      }
+
+      return extractedText;
+    } catch (error) {
+      console.error('Image extraction error:', error);
+      throw new Error('Failed to extract text from image. Please ensure you have a valid API key.');
+    }
+  };
+
+  // Main file processing function
+  const processFile = async (file) => {
+    const fileType = SUPPORTED_TYPES[file.type];
+
+    if (!fileType) {
+      throw new Error(`Unsupported file type: ${file.type}. Supported: PDF, Word (.docx), TXT, and images (PNG, JPG, JPEG, GIF, WebP)`);
+    }
+
+    switch (fileType) {
+      case 'txt':
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => reject(new Error('Failed to read text file'));
+          reader.readAsText(file);
+        });
+
+      case 'pdf':
+        return extractTextFromPDF(file);
+
+      case 'docx':
+        return extractTextFromWord(file);
+
+      case 'doc':
+        throw new Error('Old .doc format is not supported. Please save as .docx and try again.');
+
+      case 'image':
+        return extractTextFromImage(file);
+
+      default:
+        throw new Error('Unknown file type');
+    }
+  };
+
+  // Handle file upload (from input or drop)
+  const handleFileUpload = async (e) => {
+    const file = e.target?.files?.[0] || e;
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError('');
+    setUploadedFile({
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
+
+    try {
+      const extractedText = await processFile(file);
+      setInputText(extractedText);
+      setUploadError('');
+    } catch (error) {
+      setUploadError(error.message);
+      setInputText('');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  }, [userApiKey]);
+
+  // Clear uploaded file
+  const clearUpload = () => {
+    setUploadedFile(null);
+    setUploadError('');
+    setInputText('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Get file icon based on type
+  const getFileIcon = (type) => {
+    if (type?.startsWith('image/')) return <FileImage className="h-5 w-5" />;
+    if (type === 'application/pdf') return <FileText className="h-5 w-5" />;
+    if (type?.includes('word')) return <FileText className="h-5 w-5" />;
+    return <File className="h-5 w-5" />;
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   // --- Components ---
@@ -596,10 +1049,46 @@ ${generatedContent}
           
           {/* Desktop Nav */}
           <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
+            <div className="ml-10 flex items-center space-x-4">
               <a href="#generator" className="hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium">Generator</a>
               <a href="#templates" className="hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium">Templates</a>
               <a href="#contact" className="hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium">Contact</a>
+
+              {/* Auth Section */}
+              {authLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+              ) : currentUser ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowSavedDocs(true)}
+                    className="flex items-center gap-1 hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    <span>My Papers</span>
+                  </button>
+                  <div className="flex items-center gap-2 px-2">
+                    <div className="h-8 w-8 rounded-full border-2 border-blue-400 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center" title={currentUser.displayName || currentUser.email}>
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                    <button
+                      onClick={handleSignOut}
+                      className="hover:bg-slate-700 p-2 rounded-full transition-colors"
+                      title="Sign Out"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => openAuthModal('signin')}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Sign In</span>
+                </button>
+              )}
+
               <button onClick={() => setShowSettings(true)} className="hover:bg-slate-700 p-2 rounded-full transition-colors">
                 <Settings className="h-5 w-5" />
               </button>
@@ -622,6 +1111,37 @@ ${generatedContent}
             <a href="#generator" onClick={() => setShowMobileMenu(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-slate-700">Generator</a>
             <a href="#templates" onClick={() => setShowMobileMenu(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-slate-700">Templates</a>
             <a href="#contact" onClick={() => setShowMobileMenu(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-slate-700">Contact</a>
+
+            {/* Mobile Auth */}
+            {currentUser ? (
+              <>
+                <button
+                  onClick={() => { setShowSavedDocs(true); setShowMobileMenu(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-slate-700"
+                >
+                  <FolderOpen className="h-4 w-4" /> My Papers
+                </button>
+                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-700 mt-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                    <span className="text-sm text-gray-300 truncate">{currentUser.displayName || currentUser.email}</span>
+                  </div>
+                  <button onClick={() => { handleSignOut(); setShowMobileMenu(false); }} className="text-red-400 hover:text-red-300">
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={() => { openAuthModal('signin'); setShowMobileMenu(false); }}
+                className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-base font-medium bg-blue-600 text-white hover:bg-blue-700 mt-2"
+              >
+                <LogIn className="h-4 w-4" /> Sign In / Sign Up
+              </button>
+            )}
+
             <button onClick={() => { setShowSettings(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-slate-700">
               <Settings className="h-4 w-4" /> Settings
             </button>
@@ -736,22 +1256,106 @@ ${generatedContent}
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 text-center hover:bg-gray-50 transition-colors">
-                      <Upload className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-sm text-gray-600 mb-2">Drag and drop or click to upload</p>
-                      <p className="text-xs text-gray-400 mb-4">Simulates scanning of text files</p>
-                      <input 
-                        type="file" 
+                    {/* Drag & Drop Upload Area */}
+                    <div
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`relative border-2 border-dashed rounded-xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
+                        isDragging
+                          ? 'border-blue-500 bg-blue-50 scale-[1.02]'
+                          : isUploading
+                            ? 'border-yellow-400 bg-yellow-50'
+                            : uploadedFile && !uploadError
+                              ? 'border-green-400 bg-green-50'
+                              : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
                         onChange={handleFileUpload}
-                        className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mx-auto"
+                        accept=".txt,.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.bmp"
+                        className="hidden"
                       />
+
+                      {isUploading ? (
+                        <div className="space-y-3">
+                          <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500 mx-auto animate-spin" />
+                          <p className="text-sm font-medium text-yellow-700">Processing {uploadedFile?.name}...</p>
+                          <p className="text-xs text-yellow-600">Extracting text content</p>
+                        </div>
+                      ) : uploadedFile && !uploadError ? (
+                        <div className="space-y-3">
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                            <Check className="h-6 w-6 sm:h-7 sm:w-7 text-green-600" />
+                          </div>
+                          <div className="flex items-center justify-center gap-2 text-green-700">
+                            {getFileIcon(uploadedFile.type)}
+                            <span className="font-medium text-sm">{uploadedFile.name}</span>
+                          </div>
+                          <p className="text-xs text-green-600">{formatFileSize(uploadedFile.size)} • Text extracted successfully</p>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); clearUpload(); }}
+                            className="mt-2 px-4 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                          >
+                            Remove File
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center mx-auto transition-colors ${isDragging ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                            <Upload className={`h-6 w-6 sm:h-7 sm:w-7 ${isDragging ? 'text-blue-500' : 'text-gray-400'}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">
+                              {isDragging ? 'Drop your file here' : 'Drag and drop or click to upload'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              PDF, Word (.docx), TXT, or Images (PNG, JPG, JPEG)
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap justify-center gap-2 mt-3">
+                            <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">PDF</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">DOCX</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">TXT</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">PNG</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">JPG</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <textarea
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      placeholder="Extracted content will appear here..."
-                      className="w-full h-32 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    ></textarea>
+
+                    {/* Upload Error */}
+                    {uploadError && (
+                      <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium">Upload Error</p>
+                          <p className="text-xs mt-0.5">{uploadError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Extracted Content Preview */}
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {inputText ? 'Extracted Content (editable)' : 'Extracted content will appear here...'}
+                      </label>
+                      <textarea
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder="Upload a file above or paste/type your content here..."
+                        className="w-full h-40 sm:h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+                      ></textarea>
+                      {inputText && (
+                        <span className="absolute bottom-3 right-3 text-xs text-gray-400">
+                          {inputText.length.toLocaleString()} characters
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -791,6 +1395,27 @@ ${generatedContent}
                     </div>
                     <p className="text-xs text-gray-500 mt-2">
                         Adjusts the voice, vocabulary, and structure of the response.
+                    </p>
+                </div>
+
+                {/* Reference Style Selector */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                    <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-blue-500" /> Reference Style
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                        {['Auto', 'Harvard', 'IEEE'].map((style) => (
+                        <button
+                            key={style}
+                            onClick={() => setReferenceStyle(style)}
+                            className={`px-3 py-2 text-sm rounded-lg border transition-colors ${referenceStyle === style ? 'bg-blue-50 border-blue-500 text-blue-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            {style}
+                        </button>
+                        ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Auto: Uses Harvard for Thesis, IEEE for Conference papers.
                     </p>
                 </div>
 
@@ -1016,10 +1641,31 @@ ${generatedContent}
                 <h3 className="font-bold text-gray-700">Preview</h3>
                 {generatedContent && (
                   <div className="flex gap-2 items-center">
+                    {/* Save to Cloud Button */}
+                    {currentUser ? (
+                      <button
+                        onClick={() => setShowSaveModal(true)}
+                        className="flex items-center gap-1 p-2 hover:bg-green-50 rounded-md text-green-600 text-sm font-medium"
+                        title="Save to My Papers"
+                      >
+                        <Save className="h-5 w-5" />
+                        <span className="hidden sm:inline">Save</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openAuthModal('signin')}
+                        className="flex items-center gap-1 p-2 hover:bg-blue-50 rounded-md text-blue-600 text-sm font-medium"
+                        title="Sign in to save papers"
+                      >
+                        <LogIn className="h-4 w-4" />
+                        <span className="hidden sm:inline text-xs">Sign in to save</span>
+                      </button>
+                    )}
+
                     <button onClick={handlePrint} className="p-2 hover:bg-gray-100 rounded-md text-gray-600" title="Print / Save as PDF">
                       <Printer className="h-5 w-5" />
                     </button>
-                    
+
                     {/* Export Dropdown */}
                     <div className="relative">
                       <button 
@@ -1199,7 +1845,7 @@ ${generatedContent}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Gemini API Key</label>
                 <p className="text-xs text-gray-500 mb-2">Leave empty to use the default preview key. Enter your own key for private use.</p>
-                <input 
+                <input
                   type="password"
                   value={userApiKey}
                   onChange={(e) => setUserApiKey(e.target.value)}
@@ -1207,12 +1853,305 @@ ${generatedContent}
                   className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <button 
+              <button
                 onClick={() => setShowSettings(false)}
                 className="w-full bg-gray-900 text-white font-medium py-2 rounded-lg hover:bg-gray-800"
               >
                 Save & Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Document Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Save className="h-5 w-5 text-green-600" />
+                Save Document
+              </h3>
+              <button onClick={() => setShowSaveModal(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Document Title</label>
+                <input
+                  type="text"
+                  value={documentTitle}
+                  onChange={(e) => setDocumentTitle(e.target.value)}
+                  placeholder={`${selectedTemplate} Paper - ${new Date().toLocaleDateString()}`}
+                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                Your document will be saved to your account and can be accessed anytime from "My Papers".
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowSaveModal(false)}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveDocument}
+                  disabled={savingDoc}
+                  className="flex-1 bg-green-600 text-white font-medium py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {savingDoc ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Saved Documents Modal */}
+      {showSavedDocs && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <FolderOpen className="h-5 w-5 text-blue-600" />
+                My Saved Papers
+              </h3>
+              <button onClick={() => setShowSavedDocs(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingDocs ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                </div>
+              ) : savedDocuments.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <FolderOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="font-medium">No saved documents yet</p>
+                  <p className="text-sm mt-1">Generate a paper and click "Save" to store it here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {savedDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">{doc.title}</h4>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <FileText className="h-3 w-3" />
+                              {doc.template}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {doc.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown date'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleLoadDocument(doc)}
+                            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 flex items-center gap-1"
+                          >
+                            <FolderOpen className="h-3 w-3" />
+                            Load
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 rounded-b-xl">
+              <p className="text-xs text-gray-500 text-center">
+                {savedDocuments.length} document{savedDocuments.length !== 1 ? 's' : ''} saved
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-[95vw] sm:max-w-md shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-6 py-5 sm:py-8 text-white text-center relative">
+              <button
+                onClick={closeAuthModal}
+                className="absolute top-2 right-2 sm:top-4 sm:right-4 text-white/80 hover:text-white p-1"
+              >
+                <X className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <User className="h-6 w-6 sm:h-8 sm:w-8" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold">
+                {authMode === 'signin' ? 'Welcome Back' : authMode === 'signup' ? 'Create Account' : 'Reset Password'}
+              </h2>
+              <p className="text-white/80 text-xs sm:text-sm mt-1">
+                {authMode === 'signin' ? 'Sign in to save your papers' : authMode === 'signup' ? 'Join PaperGen AI today' : 'Enter your email to reset'}
+              </p>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6">
+              {/* Error/Success Messages */}
+              {authError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {authError}
+                </div>
+              )}
+              {authSuccess && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
+                  <Check className="h-4 w-4 shrink-0" />
+                  {authSuccess}
+                </div>
+              )}
+
+              {/* Google Sign In Button */}
+              {authMode !== 'reset' && (
+                <>
+                  <button
+                    onClick={handleGoogleSignIn}
+                    disabled={authLoading2}
+                    className="w-full flex items-center justify-center gap-2 sm:gap-3 border border-gray-300 rounded-lg py-2.5 sm:py-3 px-3 sm:px-4 text-sm sm:text-base text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span className="truncate">Continue with Google</span>
+                  </button>
+
+                  <div className="relative my-4 sm:my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs sm:text-sm">
+                      <span className="px-3 sm:px-4 bg-white text-gray-500">or continue with email</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Email Form */}
+              <form onSubmit={authMode === 'signin' ? handleEmailSignIn : authMode === 'signup' ? handleEmailSignUp : handlePasswordReset}>
+                {/* Name Field (Sign Up only) */}
+                {authMode === 'signup' && (
+                  <div className="mb-3 sm:mb-4">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full border border-gray-300 rounded-lg py-2 sm:py-2.5 px-3 sm:px-4 text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                      required
+                    />
+                  </div>
+                )}
+
+                {/* Email Field */}
+                <div className="mb-3 sm:mb-4">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full border border-gray-300 rounded-lg py-2 sm:py-2.5 px-3 sm:px-4 text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                {/* Password Field (Not for Reset) */}
+                {authMode !== 'reset' && (
+                  <div className="mb-3 sm:mb-4">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full border border-gray-300 rounded-lg py-2 sm:py-2.5 px-3 sm:px-4 text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                      required
+                      minLength={6}
+                    />
+                    {authMode === 'signup' && (
+                      <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Forgot Password Link */}
+                {authMode === 'signin' && (
+                  <div className="mb-3 sm:mb-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('reset')}
+                      className="text-xs sm:text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={authLoading2}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium py-2.5 sm:py-3 text-sm sm:text-base rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {authLoading2 && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {authMode === 'signin' ? 'Sign In' : authMode === 'signup' ? 'Create Account' : 'Send Reset Link'}
+                </button>
+              </form>
+
+              {/* Toggle Auth Mode */}
+              <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-600">
+                {authMode === 'signin' ? (
+                  <>
+                    <span className="block sm:inline">Don't have an account?</span>{' '}
+                    <button onClick={() => setAuthMode('signup')} className="text-blue-600 hover:text-blue-700 font-medium">
+                      Sign up
+                    </button>
+                  </>
+                ) : authMode === 'signup' ? (
+                  <>
+                    <span className="block sm:inline">Already have an account?</span>{' '}
+                    <button onClick={() => setAuthMode('signin')} className="text-blue-600 hover:text-blue-700 font-medium">
+                      Sign in
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => setAuthMode('signin')} className="text-blue-600 hover:text-blue-700 font-medium">
+                    Back to Sign In
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -1,12 +1,13 @@
 # PaperGen AI - Academic Paper Generator
 
-> **AI-Powered Academic Paper Generator with Google Gemini**
+> **AI-Powered Academic Paper Generator with Google Gemini 2.0 Flash**
 > Generate professionally formatted thesis and conference papers instantly with intelligent AI assistance.
 
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://paper-generator-ai.netlify.app/)
 [![React](https://img.shields.io/badge/React-18.2.0-blue)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.4.21-646CFF)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.0-38B2AC)](https://tailwindcss.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-11.8.1-FFCA28)](https://firebase.google.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
@@ -21,21 +22,10 @@
 
 ### Two Academic Formats
 
-**Standard Thesis/Dissertation**
-- CPUT/Harvard style structure
-- Single column layout with 1.5 line spacing
-- Times New Roman 12pt font
-- Proper chapter organization (Introduction, Literature Review, Methodology, Results, Discussion, Conclusion)
-- Harvard referencing style
-- BET Project Report Guidelines compliance
-
-**Conference Paper (IEEE Style)**
-- Professional two-column format
-- Roman numeral section headers (I, II, III...)
-- Abstract and keywords section
-- Author affiliations with superscript notation
-- Figure captions below, table captions above
-- Proper citation format [1], [2], [3]
+| Format | Description |
+|--------|-------------|
+| **Standard Thesis/Dissertation** | CPUT/Harvard style structure, single column layout with 1.5 line spacing, Times New Roman 12pt font, proper chapter organization, Harvard referencing |
+| **Conference Paper (IEEE Style)** | Professional two-column format, Roman numeral section headers, abstract and keywords, author affiliations with superscript notation, IEEE citation format [1], [2], [3] |
 
 ### Intelligent Content Generation
 
@@ -46,23 +36,55 @@
   - Professional (business-like, action-oriented)
   - Essay (narrative flow, persuasive)
   - Creative (descriptive, engaging)
+- **Reference Style Selection** - Auto, Harvard, or IEEE
+
+### File Upload & Text Extraction
+
+Upload documents to use as input for paper generation:
+
+| Format | Processing Method |
+|--------|-------------------|
+| **PDF** | Text extraction using PDF.js |
+| **Word (.docx)** | Text extraction using Mammoth.js |
+| **TXT** | Direct text reading |
+| **Images** (PNG, JPG, JPEG, GIF, WebP) | OCR using Gemini Vision AI |
+
+**Upload Features:**
+- Drag & drop support
+- Click to browse files
+- Real-time processing status
+- Editable extracted content
+- Character count display
+
+### User Authentication (Firebase)
+
+- **Google Sign-In** - One-click authentication
+- **Email/Password** - Traditional sign up and sign in
+- **Password Reset** - Email-based recovery
+- **Profile Management** - User icon display in navbar
+
+### Cloud Document Storage (Firestore)
+
+- **Save Papers** - Store generated papers to cloud
+- **My Papers** - Access saved documents anytime
+- **Load Documents** - Restore previous work
+- **Delete Documents** - Remove unwanted papers
+- **Auto-sync** - Documents sync across devices
 
 ### Custom Formatting Options
 
-Users can customize document appearance:
-- **Font Size** - 10pt to 16pt
-- **Line Spacing** - 1.0, 1.15, 1.5, 2.0
-- **Margins** - 0.5cm to 3cm
-- **Text Alignment** - Left, Center, Right, Justify
-- **Font Family** - Times New Roman, Arial, Georgia, Calibri
-- **Text Color** - Color picker for custom colors
+| Option | Values |
+|--------|--------|
+| **Font Size** | 10pt to 16pt |
+| **Line Spacing** | 1.0, 1.15, 1.5, 2.0 |
+| **Margins** | 0.5cm to 3cm |
+| **Text Alignment** | Left, Center, Right, Justify |
+| **Font Family** | Times New Roman, Arial, Georgia, Calibri |
+| **Text Color** | Custom color picker |
 
 ### Author Management
 
-- **Manual Input** - Add multiple authors with:
-  - Full Name
-  - Affiliation (Institution)
-  - Email Address
+- **Manual Input** - Add multiple authors with name, affiliation, and email
 - **AI-Generated** - Let AI create contextually appropriate author names
 
 ### Export Formats
@@ -74,12 +96,20 @@ Users can customize document appearance:
 | **PDF/Print** | Browser print dialog with proper page layout |
 | **Plain Text (.txt)** | Structured text with heading decorations |
 
+### Responsive Design
+
+- **Fully responsive** across all screen sizes
+- **Mobile-optimized** navigation and modals
+- **Touch-friendly** interface elements
+- **Adaptive layouts** for tablets and desktops
+
 ### Security Features
 
 - **HTML Sanitization** - Removes `<script>` tags and event handlers
 - **Iframe Isolation** - Preview content isolated from main application
 - **Sandbox Attribute** - Additional iframe security layer
 - **XSS Prevention** - Regex-based content filtering
+- **Environment Variables** - API keys stored securely in `.env`
 
 ---
 
@@ -92,6 +122,10 @@ Users can customize document appearance:
 | **Styling** | Tailwind CSS 3.4.0 |
 | **Icons** | Lucide React |
 | **AI Model** | Google Gemini 2.0 Flash |
+| **Authentication** | Firebase Auth |
+| **Database** | Firebase Firestore |
+| **PDF Processing** | PDF.js (pdfjs-dist) |
+| **Word Processing** | Mammoth.js |
 | **Form Handling** | Formspree |
 | **Hosting** | Netlify |
 
@@ -105,11 +139,12 @@ PaperGen-AI/
 │   └── favicon.svg              # Application icon
 ├── src/
 │   ├── App.jsx                  # Root component
-│   ├── ConferencePaperGenerator.jsx  # Main application logic (1200+ lines)
+│   ├── ConferencePaperGenerator.jsx  # Main application (2000+ lines)
+│   ├── firebase.js              # Firebase configuration & functions
 │   ├── index.jsx                # React entry point
 │   └── index.css                # Global styles & Tailwind directives
 ├── .env.example                 # Environment variables template
-├── .gitignore                   # Git ignore rules
+├── .gitignore                   # Git ignore rules (includes .env)
 ├── index.html                   # HTML entry point
 ├── package.json                 # Dependencies & scripts
 ├── vite.config.js               # Vite configuration
@@ -127,14 +162,15 @@ PaperGen-AI/
 - **Node.js** 16.x or higher
 - **npm** or **yarn**
 - **Google Gemini API Key** - [Get free key](https://makersuite.google.com/app/apikey)
+- **Firebase Project** - [Create project](https://console.firebase.google.com/)
 - **Formspree Account** (optional) - [Create form](https://formspree.io)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/HorizonHnk/Conference-Papers.git
-   cd Conference-Papers
+   git clone https://github.com/HorizonHnk/PaperGen-AI.git
+   cd PaperGen-AI
    ```
 
 2. **Install dependencies**
@@ -147,42 +183,53 @@ PaperGen-AI/
    # Copy the example file
    cp .env.example .env
 
-   # Edit .env with your keys
-   VITE_GEMINI_API_KEY=your_gemini_api_key_here
-   VITE_FORMSPREE_ID=your_formspree_form_id
+   # Edit .env with your keys (NEVER commit this file)
    ```
 
-4. **Start development server**
+4. **Set up Firebase**
+   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com/)
+   - Enable Authentication (Google + Email/Password)
+   - Enable Firestore Database
+   - Copy your config values to `.env`
+
+5. **Start development server**
    ```bash
    npm run dev
    ```
-
    App opens at `http://localhost:5173`
 
-5. **Build for production**
+6. **Build for production**
    ```bash
    npm run build
    ```
-
    Output in `dist/` folder
 
 ---
 
 ## Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (this file is gitignored for security):
 
 ```env
-# Required: Google Gemini API Key
+# Google Gemini API Key
 # Get your free key at: https://makersuite.google.com/app/apikey
 VITE_GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional: Formspree Form ID for contact form
+# Formspree Form ID (optional, for contact form)
 # Get your form ID at: https://formspree.io
 VITE_FORMSPREE_ID=your_formspree_form_id
+
+# Firebase Configuration
+# Get these values from Firebase Console > Project Settings > Your apps > Web app
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-> **Important:** Never commit your `.env` file to version control. It's already included in `.gitignore`.
+> **IMPORTANT:** Never commit your `.env` file to version control. It contains sensitive API keys.
 
 ---
 
@@ -190,14 +237,13 @@ VITE_FORMSPREE_ID=your_formspree_form_id
 
 ### Main Component (`ConferencePaperGenerator.jsx`)
 
-The application is built as a single-page React application with the following key sections:
-
 ```javascript
-// State Management
-const [selectedTemplate, setSelectedTemplate] = useState(null);  // THESIS or CONFERENCE
-const [userInput, setUserInput] = useState('');                  // Research topic
-const [generatedContent, setGeneratedContent] = useState(null);  // AI output
-const [customFormat, setCustomFormat] = useState({...});         // User formatting
+// Core State Management
+const [selectedTemplate, setSelectedTemplate] = useState('THESIS');
+const [inputMode, setInputMode] = useState('prompt'); // 'prompt' or 'upload'
+const [inputText, setInputText] = useState('');
+const [generatedContent, setGeneratedContent] = useState(null);
+const [currentUser, setCurrentUser] = useState(null);
 
 // Template Configuration
 const TEMPLATES = {
@@ -206,19 +252,38 @@ const TEMPLATES = {
 };
 
 // Core Functions
-generatePaper()      // Calls Gemini API with template-specific prompts
-sanitizeHtml()       // Removes malicious content from AI output
-exportToWord()       // Creates .doc file with proper formatting
-exportToText()       // Creates .txt with structural formatting
-exportToHtml()       // Creates standalone HTML document
+generatePaper()       // Calls Gemini API with template-specific prompts
+sanitizeHTML()        // Removes malicious content from AI output
+handleFileUpload()    // Processes PDF, Word, TXT, and images
+extractTextFromPDF()  // PDF.js text extraction
+extractTextFromWord() // Mammoth.js text extraction
+extractTextFromImage()// Gemini Vision OCR
+exportToWord()        // Creates .doc file with formatting
+exportToText()        // Creates .txt with structure
+exportToHtml()        // Creates standalone HTML document
+```
+
+### Firebase Integration (`firebase.js`)
+
+```javascript
+// Authentication Functions
+signInWithGoogle()    // Google OAuth popup
+signInWithEmail()     // Email/password sign in
+signUpWithEmail()     // New user registration
+resetPassword()       // Password reset email
+logOut()              // Sign out user
+onAuthChange()        // Auth state listener
+
+// Firestore Functions
+saveDocument()        // Save paper to cloud
+getUserDocuments()    // Fetch user's papers
+deleteDocument()      // Remove paper from cloud
 ```
 
 ### AI Integration
 
-The application uses Google Gemini 2.0 Flash with structured prompts:
-
 ```javascript
-// API Call Structure
+// Gemini API Call
 const response = await fetch(
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
   {
@@ -232,62 +297,36 @@ const response = await fetch(
 );
 ```
 
-### Styling System
-
-Uses Tailwind CSS with custom utilities:
-
-```css
-/* Layout Isolation */
-.preview-isolation {
-  isolation: isolate;
-  contain: layout style paint;
-}
-
-/* Custom Scrollbar */
-.custom-scrollbar::-webkit-scrollbar { width: 8px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #888; }
-```
-
 ---
 
 ## Usage Guide
 
 ### Basic Workflow
 
-1. **Select Template** - Click on Thesis or Conference Paper card
-2. **Enter Topic** - Describe your research topic in detail
-3. **Configure Options:**
-   - Choose target page length
-   - Select writing tone
-   - Toggle custom formatting (optional)
-   - Add author details (optional)
-4. **Generate** - Click "Generate Paper" button
-5. **Preview** - Review in live preview panel
-6. **Export** - Download in preferred format
+1. **Select Template** - Choose Thesis or Conference Paper
+2. **Input Content** - Type prompt OR upload a file (PDF, Word, TXT, Image)
+3. **Configure Options** - Page length, tone, reference style, formatting
+4. **Add Authors** (optional) - Manual input or AI-generated
+5. **Generate** - Click "Generate Paper" button
+6. **Preview** - Review in live preview panel
+7. **Export** - Download in your preferred format
+8. **Save** (logged in) - Save to cloud for later access
 
-### Custom Formatting
+### File Upload
 
-Toggle "Custom" mode to access:
-- Font size slider (10-16pt)
-- Line spacing dropdown
-- Margin adjustment
-- Text alignment options
-- Font family selection
-- Color picker for text
+1. Switch to "Upload" tab
+2. Drag & drop a file OR click to browse
+3. Supported formats: PDF, DOCX, TXT, PNG, JPG, JPEG, GIF, WebP
+4. Extracted text appears in editable area
+5. Modify if needed, then generate
 
-### Mathematical Content
+### Cloud Storage
 
-The AI automatically formats equations:
-```html
-<!-- Inline equation -->
-<i>E</i> = <i>mc</i><sup>2</sup>
-
-<!-- Greek letters -->
-α, β, γ, δ, θ, λ, π, σ, ω
-
-<!-- Mathematical symbols -->
-×, ÷, ≈, ≠, ≤, ≥, ∑, ∫
-```
+1. Sign in with Google or Email
+2. Generate a paper
+3. Click "Save" in the preview section
+4. Enter a title and save
+5. Access from "My Papers" anytime
 
 ---
 
@@ -295,69 +334,26 @@ The AI automatically formats equations:
 
 ### Netlify (Recommended)
 
-1. **Connect Repository**
-   - Log in to [Netlify](https://netlify.com)
-   - Click "New site from Git"
-   - Select your repository
-
-2. **Configure Build Settings**
+1. Connect your GitHub repository
+2. Configure build settings:
    ```
    Build command: npm run build
    Publish directory: dist
    ```
+3. Add environment variables in Site Settings
+4. Deploy automatically on push
 
-3. **Set Environment Variables**
-   - Go to Site settings > Environment variables
-   - Add `VITE_GEMINI_API_KEY` and `VITE_FORMSPREE_ID`
+### Environment Variables on Netlify
 
-4. **Deploy**
-   - Automatic deploys on push to main branch
-
-### Vercel
-
-```bash
-npm install -g vercel
-vercel
-# Follow prompts to deploy
-```
-
-### Manual Deployment
-
-```bash
-npm run build
-# Upload dist/ folder to any static hosting
-```
-
----
-
-## API Reference
-
-### Gemini API Request
-
-```javascript
-POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
-
-{
-  "contents": [{
-    "parts": [{ "text": "User's research topic and requirements" }]
-  }],
-  "systemInstruction": {
-    "parts": [{ "text": "Template-specific formatting instructions" }]
-  }
-}
-```
-
-### Gemini API Response
-
-```javascript
-{
-  "candidates": [{
-    "content": {
-      "parts": [{ "text": "<html>Generated document...</html>" }]
-    }
-  }]
-}
-```
+Add these in Site Settings > Environment Variables:
+- `VITE_GEMINI_API_KEY`
+- `VITE_FORMSPREE_ID`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
 
 ---
 
@@ -380,33 +376,13 @@ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:ge
 4. Push to branch (`git push origin feature/NewFeature`)
 5. Open a Pull Request
 
-### Guidelines
-
-- Use functional components with React hooks
-- Follow Tailwind CSS conventions
-- Add comments for complex logic
-- Test all export formats
-- Ensure mobile responsiveness
-
 ---
 
 ## Known Issues
 
-- Mathematical equations may render differently in older Word versions
-- Very long documents (100+ pages) may impact browser performance
+- Old `.doc` format not supported (use `.docx`)
+- Very long documents may impact browser performance
 - Print/PDF quality depends on browser capabilities
-
----
-
-## Roadmap
-
-- [ ] Additional citation styles (APA, MLA, Chicago)
-- [ ] LaTeX export option
-- [ ] Real-time collaborative editing
-- [ ] Template marketplace
-- [ ] Advanced equation editor
-- [ ] Reference manager integration
-- [ ] Dark mode toggle
 
 ---
 
@@ -428,26 +404,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [Google Gemini AI](https://ai.google.dev/) - AI text generation
+- [Google Gemini AI](https://ai.google.dev/) - AI text generation & vision
+- [Firebase](https://firebase.google.com/) - Authentication & database
 - [React](https://reactjs.org/) - UI framework
 - [Tailwind CSS](https://tailwindcss.com/) - CSS framework
+- [PDF.js](https://mozilla.github.io/pdf.js/) - PDF processing
+- [Mammoth.js](https://github.com/mwilliamson/mammoth.js) - Word document processing
 - [Lucide Icons](https://lucide.dev/) - Icon library
 - [Vite](https://vitejs.dev/) - Build tool
 - [Netlify](https://netlify.com/) - Hosting platform
-- [Formspree](https://formspree.io/) - Form handling
-
----
-
-## Support
-
-For support, email hhnk3693@gmail.com or [open an issue](https://github.com/HorizonHnk/Conference-Papers/issues).
 
 ---
 
 <div align="center">
 
-**Built with React + Vite + Tailwind CSS**
+**Built with React + Vite + Tailwind CSS + Firebase**
 
-[Live Demo](https://paper-generator-ai.netlify.app/) | [Report Bug](https://github.com/HorizonHnk/Conference-Papers/issues) | [Request Feature](https://github.com/HorizonHnk/Conference-Papers/issues)
+[Live Demo](https://paper-generator-ai.netlify.app/) | [Report Bug](https://github.com/HorizonHnk/PaperGen-AI/issues) | [Request Feature](https://github.com/HorizonHnk/PaperGen-AI/issues)
 
 </div>

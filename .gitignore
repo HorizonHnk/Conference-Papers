@@ -44,6 +44,7 @@ lerna-debug.log*
 *.temp
 .tmp/
 .temp/
+~$*
 
 # Operating System
 Thumbs.db
