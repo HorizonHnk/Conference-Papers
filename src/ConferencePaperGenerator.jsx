@@ -49,12 +49,21 @@ const ConferencePaperGenerator = () => {
   const [generatedContent, setGeneratedContent] = useState(null);
   const [error, setError] = useState(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [userApiKey, setUserApiKey] = useState('Enter_Your_Gemini_API_Key_Here'); // Placeholder for user API key
+  const [userApiKey, setUserApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || '');
   const [showSettings, setShowSettings] = useState(false);
   const [previewScale, setPreviewScale] = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false); // State for export dropdown
   const [useManualAuthors, setUseManualAuthors] = useState(false);
   const [authors, setAuthors] = useState([{ name: '', affiliation: '', email: '' }]);
+  const [useCustomFormatting, setUseCustomFormatting] = useState(false);
+  const [customFormat, setCustomFormat] = useState({
+    fontSize: '12',
+    lineSpacing: '1.5',
+    padding: '1.5',
+    textAlign: 'justify',
+    textColor: '#000000',
+    fontFamily: 'Times New Roman'
+  });
   const previewContainerRef = useRef(null);
 
   // Sanitize HTML to remove scripts and potentially harmful content
@@ -117,58 +126,172 @@ const ConferencePaperGenerator = () => {
 
   const TEMPLATES = {
     THESIS: {
-      name: 'Standard Thesis Paper',
+      name: 'Standard Thesis/Dissertation',
       icon: BookOpen,
-      description: 'Academic Thesis following standard CPUT/Harvard guidelines (Chapters 1-6).',
-      features: ['1.5 Line Spacing', 'Harvard Referencing', 'Standard Chapters', '2.5cm Margins'],
+      description: 'Academic Thesis/Dissertation following standard university guidelines.',
+      features: ['1.5 Line Spacing', 'Harvard Referencing', 'Complete Structure', '2.5cm Margins'],
       promptDirective: `
-        Format the output as a professional HTML Thesis Paper.
-        
+        Format the output as a professional HTML Thesis/Dissertation Paper.
+
         STRICT FORMATTING RULES (THESIS STRUCTURE):
-        1. **Layout**: Single Column. 
+        1. **Layout**: Single Column.
         2. **Font**: Times New Roman, Size 12.
         3. **Spacing**: Line spacing 1.5.
         4. **Margins**: 2.5cm on all sides (simulate with CSS padding).
         5. **Referencing**: Harvard Style (e.g., (Jones, 2022)).
-        
-        REQUIRED STRUCTURE:
-        1. **Abstract**: A comprehensive summary of the research aims, methodology, findings, and conclusion (approx. 200-300 words).
-        2. **Chapter 1: Introduction**: Background and context.
-        3. **Chapter 2: Literature Review**: "Previous studies by..."
-        4. **Chapter 3: Methodology**: "A finite element analysis..."
-        5. **Chapter 4: Results**: Presentation of data.
-        6. **Chapter 5: Discussion**: Analysis of results.
-        7. **Chapter 6: Conclusion and Recommendations**
-        
-        MANDATORY PROJECT GUIDELINES (APPLIES TO ALL):
-        1. **Figure Placement**: Descriptive title placed **UNDERNEATH** the figure (e.g., "Figure 1: Block Diagram").
-        2. **Table Placement**: Name placed **ABOVE** the table (e.g., "Table 1: Cost Breakdown").
-        3. **Context**: You MUST introduce every Figure and Table in the text *before* showing it (e.g., "As shown in Figure 1...").
-        4. **References**: ZERO TOLERANCE for fake references. Use valid sources.
+
+        REQUIRED STRUCTURE (in this exact order):
+        1. **Title Page**: Title, Author name(s), Institution, Date - centered and formatted.
+        2. **Preface/Acknowledgements**: Brief acknowledgements section.
+        3. **Abstract**: A comprehensive summary of the research aims, methodology, findings, and conclusion (approx. 200-300 words).
+        4. **Table of Contents**: List of all sections with page indicators.
+        5. **List of Figures**: If figures are included.
+        6. **List of Tables**: If tables are included.
+        7. **Introduction**: Background, context, problem statement, objectives.
+        8. **Literature Review**: Critical analysis of existing research - "Previous studies by..."
+        9. **Methodology**: Research design, data collection methods, analysis approach.
+        10. **Results**: Presentation of data and findings.
+        11. **Discussion**: Analysis and interpretation of results.
+        12. **Conclusion**: Summary of findings, recommendations, future research.
+        13. **References**: Complete list of all cited sources in Harvard format.
+        14. **Appendices** (if needed): Supplementary materials.
+
+        BET PROJECT REPORT GUIDELINES (MANDATORY - APPLIES TO ALL):
+
+        1. **INTRODUCTION OF FIGURES & TABLES**:
+           - Figures and Tables MUST be introduced with comprehensive information in the text BEFORE they are presented
+           - Merely referring to "Figure 2" or "Table 3" is INSUFFICIENT
+           - Inserting a figure or table without first introducing it is NOT acceptable
+           - You must provide context for the reader
+
+        2. **REFERENCING AND LABELING**:
+           - **Direct References**: Use "Table 1 illustrates the project budget..." or "As shown in Figure 4, the output signal..."
+           - NEVER use phrases like "the table below" or "the figure above"
+           - **Figure Labels**: Each figure must have a number and descriptive title placed UNDERNEATH (e.g., "Figure 5: Voltage Regulator Output Waveform")
+           - **Table Labels**: Each table must have a number and name placed ABOVE (e.g., "Table 2: Component Cost Breakdown")
+
+        3. **APPENDICES**:
+           - Use appendices for supplementary materials like detailed datasheets, extensive code, or additional schematics
+           - Each appendix must be clearly titled (e.g., "Appendix A: PCB Schematic")
+           - Reference appendices in the main text
+
+        4. **REFERENCE INTEGRITY**:
+           - Every source in the reference list MUST be cited in the main text
+           - Every in-text citation MUST appear in the reference list
+           - ZERO TOLERANCE for AI-generated or fake references - this is academic misconduct
+           - All references must be real, verifiable sources
+
+        5. **REFERENCES SECTION** (CRITICAL - MUST BE INCLUDED):
+           - Include a complete "References" section at the end
+           - Use Harvard referencing format: (Author, Year)
+           - List all sources alphabetically by author surname
+           - Include: Author(s), Year, Title, Publication, Volume, Pages, DOI/URL where applicable
       `
     },
     CONF_PAPER: {
-      name: 'Conference Paper',
+      name: 'Conference Paper (IEEE Style)',
       icon: ScrollText,
-      description: 'Professional two-column conference paper format.',
+      description: 'Professional two-column IEEE conference paper format.',
       features: ['Two-Column Layout', 'Strict Caption Rules', 'Roman Numeral Headers', 'Abstract & Keywords'],
       promptDirective: `
-        Format the output as a professional HTML Conference Paper.
-        
-        STRUCTURE INSTRUCTIONS:
-        1. **Layout**: STRICT Two-Column layout for body text (CSS column-count: 2; gap: 2rem).
-        2. **Title**: Centered, 24pt Times New Roman.
-        3. **Authors**: Centered below title.
-        4. **Abstract**: Bold, single-column.
-        5. **Headings**: Roman Numerals (I., II., III.) in Small Caps.
-        
-        MANDATORY PROJECT GUIDELINES:
-        1. **Figure Placement**: Caption **UNDERNEATH** (e.g., "Figure 1: Title").
-        2. **Table Placement**: Caption **ABOVE** (e.g., "Table 1: Title").
-        3. **Context**: Introduce visuals in text first.
-        4. **Appendices**: Place technical code/schematics at the end.
-        
-        Content Structure: Abstract, Introduction, Methodology, Findings, Conclusion, References.
+        Format the output as a professional HTML IEEE Conference Paper following the exact IEEE template format.
+
+        PAGE LAYOUT:
+        1. **Paper Size**: A4 (210mm x 297mm)
+        2. **Columns**: Two-column layout for body text (CSS column-count: 2; column-gap: 0.8cm)
+        3. **Margins**: Top 2.7cm, Bottom 7.2cm, Left/Right 4.465cm
+        4. **Font**: Times New Roman throughout
+
+        TITLE AREA (Single column, centered):
+        1. **Title**: 24pt, centered, NO sub-titles allowed (sub-titles are not captured in IEEE Xplore)
+        2. **Authors**: Arranged in up to 3 columns below title
+           - Each author block contains (in order):
+             * Author Name (e.g., "1st Given Name Surname")
+             * Department name of organization (italic)
+             * Name of organization/Affiliation (italic)
+             * City, Country
+             * Email address or ORCID
+
+        ABSTRACT AND KEYWORDS (Single column):
+        1. **Abstract**: Bold "Abstract—" followed by 150-250 word summary
+           - *CRITICAL*: Do NOT use symbols, special characters, footnotes, or math in Abstract
+        2. **Keywords**: Bold "Keywords—" followed by comma-separated terms (4-6 keywords)
+
+        SECTION HEADINGS (Roman numerals, SMALL CAPS, centered):
+        - **I. INTRODUCTION** (Heading 1 - Roman numeral, all caps, centered)
+        - **A. Subsection Title** (Heading 2 - Letter, italic title)
+        - **1) Sub-subsection** (Heading 3 - Number with parenthesis)
+        - **a) Sub-sub-subsection** (Heading 4 - Letter with parenthesis, italic)
+
+        REQUIRED CONTENT STRUCTURE:
+        - **Abstract**: Brief summary (NO math/symbols)
+        - **Keywords**: 4-6 relevant terms, comma-separated
+        - **I. INTRODUCTION**: Background, context, objectives
+        - **II. RELATED WORK/LITERATURE REVIEW**: Previous research
+        - **III. METHODOLOGY**: Approach and methods
+        - **IV. RESULTS**: Data and findings
+        - **V. DISCUSSION**: Analysis of results
+        - **VI. CONCLUSION**: Summary and future work
+        - **ACKNOWLEDGMENT**: (No Roman numeral, no "e" after "g")
+        - **REFERENCES**: (No Roman numeral)
+
+        FIGURES AND TABLES:
+        1. **Figure Captions**: BELOW the figure, format: "Fig. 1. Description here."
+           - Use "Fig. 1" abbreviation even at beginning of sentence
+           - Use 8pt Times New Roman for figure labels
+        2. **Table Titles**: ABOVE the table, format: "TABLE I. TITLE IN CAPS"
+           - Tables use Roman numerals (TABLE I, TABLE II, etc.)
+           - Table footnotes use superscript letters (a, b, c)
+        3. **Placement**: Place figures/tables at top or bottom of columns, avoid middle
+        4. **Large elements**: May span across both columns
+
+        EQUATIONS:
+        - Number consecutively with right-aligned numbers in parentheses: (1)
+        - Center equations using center alignment
+        - Use "(1)" not "Eq. (1)" except at sentence beginning
+        - Italicize variables but NOT Greek symbols
+
+        REFERENCES FORMAT:
+        - Numbered consecutively [1], [2], [3] in brackets
+        - Use "[3]" not "Ref. [3]" except at sentence beginning
+        - List all authors unless 6+ (then use "et al.")
+        - Capitalize only first word in paper titles
+        - MUST include a complete REFERENCES section at the end
+
+        BET PROJECT REPORT GUIDELINES (MANDATORY - APPLIES TO ALL):
+
+        1. **INTRODUCTION OF FIGURES & TABLES**:
+           - Figures and Tables MUST be introduced with comprehensive information in the text BEFORE they are presented
+           - Merely referring to "Fig. 2" or "Table III" is INSUFFICIENT
+           - Inserting a figure or table without first introducing it is NOT acceptable
+           - Provide context for the reader before showing any visual element
+
+        2. **REFERENCING AND LABELING**:
+           - **Direct References**: Use "Table I illustrates the project budget..." or "As shown in Fig. 4, the output signal..."
+           - NEVER use phrases like "the table below" or "the figure above"
+           - **Figure Labels**: Each figure must have a number and descriptive title placed UNDERNEATH (e.g., "Fig. 5. Voltage Regulator Output Waveform")
+           - **Table Labels**: Each table must have Roman numeral and name placed ABOVE (e.g., "TABLE II. COMPONENT COST BREAKDOWN")
+
+        3. **APPENDICES**:
+           - Use appendices for supplementary materials like detailed datasheets, extensive code, or additional schematics
+           - Each appendix must be clearly titled (e.g., "Appendix A: PCB Schematic")
+           - Reference appendices in the main text
+
+        4. **REFERENCE INTEGRITY**:
+           - Every source in the reference list MUST be cited in the main text
+           - Every in-text citation [1], [2] MUST appear in the reference list
+           - ZERO TOLERANCE for AI-generated or fake references - this is academic misconduct
+           - All references must be real, verifiable sources
+
+        5. **REFERENCES SECTION** (CRITICAL - MUST BE INCLUDED):
+           - Include a complete "REFERENCES" section at the end (no Roman numeral)
+           - Number references consecutively [1], [2], [3]
+           - Include: Author(s), "Title," Publication, vol., pp., Month Year.
+
+        6. **ADDITIONAL IEEE REQUIREMENTS**:
+           - **Abbreviations**: Define on first use (except IEEE, SI, MKS, CGS, etc.)
+           - **Units**: Use SI units, zero before decimals ("0.25" not ".25")
+           - **Equations**: Use "(1)" not "Eq. (1)" except at sentence beginning
       `
     }
   };
@@ -188,25 +311,45 @@ const ConferencePaperGenerator = () => {
     const templateConfig = TEMPLATES[selectedTemplate];
     const toneInstruction = TONES[selectedTone]; 
     
-    const lengthInstruction = targetPages === 'Auto' 
-      ? "Content Length: Generate comprehensive content appropriate for the topic, ensuring all sections are well-covered." 
+    const lengthInstruction = targetPages === 'Auto'
+      ? "Content Length: Generate comprehensive content appropriate for the topic, ensuring all sections are well-covered."
       : `Content Length: Generate a SUBSTANTIAL amount of detailed text, data, figures, and tables. The output HTML must contain enough content to fill approximately ${targetPages} when printed. Expand deeply on Methodology, Literature Review, and Discussion to meet this length requirement.`;
+
+    // Custom formatting instruction
+    const customFormatInstruction = useCustomFormatting
+      ? `
+      CUSTOM FORMATTING (USER SPECIFIED - USE THESE VALUES):
+      - Font Family: '${customFormat.fontFamily}', serif
+      - Font Size: ${customFormat.fontSize}pt
+      - Line Spacing: ${customFormat.lineSpacing}
+      - Margins/Padding: ${customFormat.padding}cm
+      - Text Alignment: ${customFormat.textAlign}
+      - Text Color: ${customFormat.textColor}
+
+      Apply these custom styles to the body: body { font-family: '${customFormat.fontFamily}', serif; font-size: ${customFormat.fontSize}pt; line-height: ${customFormat.lineSpacing}; padding: ${customFormat.padding}cm; color: ${customFormat.textColor}; text-align: ${customFormat.textAlign}; max-width: 210mm; margin: auto; }
+      `
+      : '';
+
+    const defaultCssInstruction = useCustomFormatting
+      ? ''
+      : `
+      - For Thesis: body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.5; padding: 1.5cm; max-width: 210mm; margin: auto; text-align: justify; }
+      - For Conference: body { font-family: 'Times New Roman', serif; font-size: 10pt; padding: 1cm; max-width: 210mm; margin: auto; } .columns { column-count: 2; column-gap: 0.6cm; text-align: justify; } .title-area { column-span: all; text-align: center; margin-bottom: 0.8cm; }`;
 
     const systemPrompt = `
       You are an expert academic paper formatter.
       Generate a COMPLETE, styled HTML document.
-      
+
       ${templateConfig.promptDirective}
-      
+
       TONE AND STYLE INSTRUCTION:
       ${toneInstruction}
 
       ${lengthInstruction}
-      
+      ${customFormatInstruction}
+
       TECHNICAL CSS REQUIREMENTS:
-      - Use <style> blocks.
-      - For Thesis: body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.5; padding: 2.5cm; max-width: 210mm; margin: auto; text-align: justify; }
-      - For Conference: .columns { column-count: 2; column-gap: 0.8cm; text-align: justify; } .title-area { column-span: all; text-align: center; margin-bottom: 1cm; }
+      - Use <style> blocks.${defaultCssInstruction}
       - Figures/Tables: Ensure captions are correctly placed (Table ABOVE, Figure BELOW).
       - Do not use Markdown backticks. Return raw HTML.
       - DO NOT include any <script> tags or JavaScript code.
@@ -442,11 +585,14 @@ ${generatedContent}
     <nav className="bg-slate-900 text-white sticky top-0 z-50 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+          >
             <FileText className="h-8 w-8 text-blue-400" />
             <span className="font-bold text-xl tracking-tight hidden sm:block">PaperGen AI</span>
             <span className="font-bold text-xl tracking-tight sm:hidden">PaperGen</span>
-          </div>
+          </button>
           
           {/* Desktop Nav */}
           <div className="hidden md:block">
@@ -553,7 +699,7 @@ ${generatedContent}
       {/* Main Generator Section - Responsive Layout */}
       <div id="generator" className="py-12 md:py-16 bg-white border-t border-gray-200 px-4">
         <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-stretch">
             
             {/* Left Column: Inputs */}
             <div className="space-y-6">
@@ -731,6 +877,113 @@ ${generatedContent}
                   )}
                 </div>
 
+                {/* Custom Formatting Section */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                      <Settings className="h-4 w-4 text-blue-500" /> Custom Formatting
+                    </label>
+                    <button
+                      onClick={() => setUseCustomFormatting(!useCustomFormatting)}
+                      className={`px-3 py-1 text-xs rounded-md transition-colors ${useCustomFormatting ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      {useCustomFormatting ? 'Custom' : 'Default'}
+                    </button>
+                  </div>
+
+                  {useCustomFormatting && (
+                    <div className="space-y-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Font Size (pt)</label>
+                          <select
+                            value={customFormat.fontSize}
+                            onChange={(e) => setCustomFormat({...customFormat, fontSize: e.target.value})}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="10">10pt</option>
+                            <option value="11">11pt</option>
+                            <option value="12">12pt</option>
+                            <option value="14">14pt</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Line Spacing</label>
+                          <select
+                            value={customFormat.lineSpacing}
+                            onChange={(e) => setCustomFormat({...customFormat, lineSpacing: e.target.value})}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="1">Single (1.0)</option>
+                            <option value="1.15">1.15</option>
+                            <option value="1.5">1.5</option>
+                            <option value="2">Double (2.0)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Margins (cm)</label>
+                          <select
+                            value={customFormat.padding}
+                            onChange={(e) => setCustomFormat({...customFormat, padding: e.target.value})}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="0.5">0.5cm (Narrow)</option>
+                            <option value="1">1cm (Small)</option>
+                            <option value="1.5">1.5cm (Normal)</option>
+                            <option value="2">2cm (Wide)</option>
+                            <option value="2.5">2.5cm (Extra Wide)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Text Align</label>
+                          <select
+                            value={customFormat.textAlign}
+                            onChange={(e) => setCustomFormat({...customFormat, textAlign: e.target.value})}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="justify">Justify</option>
+                            <option value="left">Left</option>
+                            <option value="center">Center</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Font Family</label>
+                          <select
+                            value={customFormat.fontFamily}
+                            onChange={(e) => setCustomFormat({...customFormat, fontFamily: e.target.value})}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Calibri">Calibri</option>
+                            <option value="Georgia">Georgia</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Text Color</label>
+                          <input
+                            type="color"
+                            value={customFormat.textColor}
+                            onChange={(e) => setCustomFormat({...customFormat, textColor: e.target.value})}
+                            className="w-full h-8 px-1 py-0.5 border border-gray-300 rounded-md cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!useCustomFormatting && (
+                    <p className="text-xs text-gray-500">
+                      Using default formatting based on selected template.
+                    </p>
+                  )}
+                </div>
+
                 <button
                   onClick={generatePaper}
                   disabled={isGenerating}
@@ -758,7 +1011,7 @@ ${generatedContent}
             </div>
 
             {/* Right Column: Preview - Smart Scaling */}
-            <div className="bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex flex-col min-h-[800px] h-auto lg:h-[90vh] max-h-[1400px] shadow-inner relative preview-isolation">
+            <div className="bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex flex-col h-full lg:min-h-[1180px] shadow-inner relative preview-isolation">
               <div className="bg-white p-4 border-b border-gray-200 flex items-center justify-between shrink-0 z-10 relative">
                 <h3 className="font-bold text-gray-700">Preview</h3>
                 {generatedContent && (
@@ -817,9 +1070,9 @@ ${generatedContent}
               >
                 {generatedContent ? (
                   <div
+                    id="preview-wrapper"
                     style={{
                       width: `${794 * previewScale}px`,
-                      minHeight: '600px',
                       margin: '0 auto'
                     }}
                   >
@@ -843,6 +1096,11 @@ ${generatedContent}
                         if (iframe.contentDocument) {
                           const height = iframe.contentDocument.documentElement.scrollHeight;
                           iframe.style.height = height + 'px';
+                          // Update wrapper height to match scaled iframe
+                          const wrapper = document.getElementById('preview-wrapper');
+                          if (wrapper) {
+                            wrapper.style.height = (height * previewScale) + 'px';
+                          }
                         }
                       }}
                     />
@@ -895,7 +1153,7 @@ ${generatedContent}
             {/* Contact Form */}
             <div className="bg-slate-800 p-6 md:p-8 rounded-xl">
               <h3 className="text-xl font-bold mb-6">Get In Touch</h3>
-              <form action="Enter_Your_Formspree_Keys" method="POST" className="space-y-4">
+              <form action={`https://formspree.io/f/${import.meta.env.VITE_FORMSPREE_ID}`} method="POST" className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Your Email</label>
                   <input 
@@ -903,7 +1161,7 @@ ${generatedContent}
                     name="email" 
                     required 
                     className="w-full bg-slate-700 border-none rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500"
-                    placeholder="john@example.com"
+                    placeholder="hnk@example.com"
                   />
                 </div>
                 <div>
